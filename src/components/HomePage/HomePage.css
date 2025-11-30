@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+.gauge-wrapper {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    max-width: 200px;
+    max-height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.gauge-arc {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: conic-gradient(from 225deg, #37bb98 0deg, #37bb98 270deg, transparent 270deg, transparent 360deg);
+    mask: radial-gradient(transparent 68%, black 69%);
+    -webkit-mask: radial-gradient(transparent 68%, black 69%);
+    transform: rotate(-45deg);
+    position: absolute;
+}
+.gauge-bg {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: conic-gradient(from 225deg, #edf2f7 0deg, #edf2f7 270deg, transparent 270deg, transparent 360deg);
+    mask: radial-gradient(transparent 68%, black 69%);
+    -webkit-mask: radial-gradient(transparent 68%, black 69%);
+    transform: rotate(-45deg);
+    position: absolute;
+    z-index: -1;
+}
+.gauge-knob-container {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    transform: rotate(-135deg);
+    animation: knobMove 1.5s ease-out forwards;
+}
+.gauge-knob {
+    width: 16px;
+    height: 16px;
+    background-color: #f2946d;
+    border: 3px solid white;
+    border-radius: 50%;
+    position: absolute;
+    top: 5%; 
+    left: 50%;
+    transform: translateX(-50%);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+@keyframes knobMove {
+    from { transform: rotate(-135deg); }
+    to { transform: rotate(45deg); }
+}

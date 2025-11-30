@@ -1,35 +1,54 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import React, { useState } from 'react';
+import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom';
 
-function App() {
-  const [count, setCount] = useState(0)
+import Sidebar from './components/Sidebar';
+import Header from './components/Header';
+import SettingModal from './components/SettingModal';
+import NotFound from './components/NotFound';
 
+import HomePage from './components/HomePage/HomePage';
+import StatisticsPage from './components/StatisticsPage/StatisticsPage';
+import MembersPage from './components/MembersPage/MembersPage';
+import HistoryPage from './components/HistoryPage/HistoryPage';
+
+import Login from './components/Auth/Login'; 
+import Signup from './components/Auth/Signup';
+import ForgotPassword from './components/Auth/ForgotPassword';
+
+const MainLayout = () => {
   return (
     <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
+      <SettingModal />
+      <div id="mobile-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-black/50 z-40 hidden opacity-0 transition-opacity duration-300 md:hidden"></div>
+      <Sidebar />
+      <main className="flex-1 flex flex-col h-full relative min-w-0 bg-gray-50 transition-all duration-300">
+        <Header />
+        <Outlet />
+      </main>
     </>
-  )
+  );
+};
+
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+
+        <Route element={<MainLayout />}>
+          <Route path="/" element={<HomePage />} />
+          
+          <Route path="/statistics" element={<StatisticsPage />} />
+          <Route path="/members" element={<MembersPage />} />
+          <Route path="/history" element={<HistoryPage />} />
+          
+          <Route path="*" element={<NotFound />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
+  );
 }
 
-export default App
+export default App;

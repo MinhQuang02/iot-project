@@ -4,10 +4,74 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>iot-project</title>
+    <title>GreenSphere</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Mulish:wght@400;500;600;700&family=Poppins:wght@600;700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            green: '#37bb98',
+                            dark: '#1f856a',
+                            light: '#ebfbf7',
+                            gray: '#f3f4f6',
+                            text: '#2d3748',
+                            muted: '#a0aec0',
+                            'brand-green': '#37bb98',
+                            'brand-dark': '#14532d',
+                            'brand-light': '#dcfce7'
+                        }
+
+                    },
+                    fontFamily: {
+                        sans: ['Mulish', 'sans-serif'],
+                        poppins: ['Poppins', 'sans-serif'],
+                        lato: ['Lato', 'sans-serif'],
+                    },
+                    borderRadius: {
+                        '4xl': '2rem',
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 20px -2px rgba(0, 0, 0, 0.05)',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+        .sidebar-transition {
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .text-transition {
+            transition: opacity 0.2s ease-in-out;
+            white-space: nowrap;
+        }
+        .custom-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+            border-radius: 4px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #d1d5db; 
+            border-radius: 4px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb:hover {
+            background: #9ca3af; 
+        }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <body id="root" class="bg-gray-50 h-screen w-screen overflow-hidden text-slate-700 font-sans flex relative"></body>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
