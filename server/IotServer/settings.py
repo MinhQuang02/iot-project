@@ -32,6 +32,9 @@ ALLOWED_HOSTS = ['*']
 
 # Application definition
 
+
+# Application definition
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -39,6 +42,9 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'corsheaders',
+    'rest_framework',
+    'rest_framework_simplejwt',
     'mqttbridge',
     'iot_app',
 ]
@@ -46,8 +52,22 @@ INSTALLED_APPS = [
 # Supabase Configuration
 SUPABASE_URL = 'https://xwvnmxgrwptdlefbjvsq.supabase.co'
 SUPABASE_KEY = 'sb_secret_7D_JIlajkH4BYwMJlWYfMQ_wxfhPFhK'
+SUPABASE_PASSWORD = 'sracLKPqdVORR3SW'
+SUPABASE_DB_HOST = 'db.xwvnmxgrwptdlefbjvsq.supabase.co'
+SUPABASE_DB_NAME = 'postgres'
+SUPABASE_DB_USER = 'postgres'
+SUPABASE_DB_PORT = '5432'
+
+# Email Configuration
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'mphanquang021105@gmail.com'
+EMAIL_HOST_PASSWORD = 'hgmx guiv mjzz vaem'
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -87,6 +107,29 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
+
+# Custom User Model - Removed to use default User for local tokens
+# AUTH_USER_MODEL = 'iot_app.User'
+
+# DRF Configuration
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+}
+
+# JWT Configuration
+from datetime import timedelta
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+}
+
+# CORS Configuration
+CORS_ALLOW_ALL_ORIGINS = True
 
 
 # Password validation
