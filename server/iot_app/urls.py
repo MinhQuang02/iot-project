@@ -2,6 +2,7 @@ from django.urls import path
 from . import views
 from . import views_auth
 from . import views_data
+from . import views_device
 from rest_framework_simplejwt.views import TokenRefreshView
 
 urlpatterns = [
@@ -28,4 +29,11 @@ urlpatterns = [
     path('data/stats/environment/', views_data.StatisticsEnvView.as_view(), name='stats_env'),
     path('data/stats/activity/', views_data.StatisticsActivityView.as_view(), name='stats_activity'),
     path('data/stats/top-users/', views_data.StatisticsTopUsersView.as_view(), name='stats_top_users'),
+    
+    # Device Control & Data
+    path('api/device/door/', views_device.DeviceDoorView.as_view(), name='device_door'),
+    path('api/device/lcd/', views_device.DeviceLCDView.as_view(), name='device_lcd'),
+    path('api/device/sensors/', views_device.DeviceSensorsView.as_view(), name='device_sensors'),
+    path('api/device/camera/', views_device.DeviceCameraView.as_view(), name='device_camera'),
+    path('api/device/rfid/', views_device.DeviceRFIDView.as_view(), name='device_rfid'),
 ]

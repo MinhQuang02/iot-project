@@ -1,16 +1,40 @@
-import React, { useState, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, forwardRef, useImperativeHandle, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import axiosClient from '../api/axiosClient';
+import { useNavigate } from 'react-router-dom';
 import './SettingModal.css'
 
 const SettingModal = forwardRef((props, ref) => {
-    const { user: authUser } = useAuth();
+    const { user: authUser, logout } = useAuth();
+    const navigate = useNavigate();
+
+    const [firstName, setFirstName] = useState('');
+    const [lastName, setLastName] = useState('');
+    const [maid, setMaid] = useState(''); // New state for User ID
+    const [password, setPassword] = useState('');
+    const [isVisible, setIsVisible] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [isIdEditable, setIsIdEditable] = useState(false); // State to toggle ID edit mode
+
+    // Initialize/Reset form data when modal opens or user changes
+    useEffect(() => {
+        if (authUser) {
+            setFirstName(authUser.TenND || '');
+            setLastName(authUser.HoND || '');
+            setMaid(authUser.MaID || ''); // Init maid
+            setIsIdEditable(false);       // Reset edit mode
+            setPassword(''); // Always init password as empty
+        }
+    }, [authUser, isVisible]);
 
     const user = authUser ? {
         firstName: authUser.TenND || '',
         lastName: authUser.HoND || '',
         fullName: authUser.Username || `${authUser.TenND} ${authUser.HoND}`,
         email: authUser.Email,
-        id: authUser.MaID ? `ID: ${authUser.MaID}` : 'N/A', // Using MaID
+        id: authUser.MaID ? `ID: ${authUser.MaID}` : 'ID: N/A',
+        displayId: authUser.MaID || 'N/A', // For copy button
         role: authUser.QuyenHan === 'admin' ? 'Admin' : 'Member'
     } : {
         firstName: "Guest",
@@ -18,11 +42,9 @@ const SettingModal = forwardRef((props, ref) => {
         fullName: "Guest",
         email: "guest@example.com",
         id: "N/A",
+        displayId: "N/A",
         role: "Visitor"
     };
-
-    const [isVisible, setIsVisible] = useState(false);
-    const [showPassword, setShowPassword] = useState(false);
 
     const openModal = () => setIsVisible(true);
     const closeModal = () => setIsVisible(false);
@@ -34,6 +56,65 @@ const SettingModal = forwardRef((props, ref) => {
 
     const handleActionClose = () => {
         closeModal();
+    };
+
+    const handleEditId = () => {
+        if (window.confirm("WARNING: Changing your User ID might affect your history tracking and access control. Are you sure you want to proceed?")) {
+            setIsIdEditable(true);
+        }
+    };
+
+    const handleSave = async () => {
+        setIsLoading(true);
+        try {
+            const payload = {
+                first_name: firstName,
+                last_name: lastName,
+                maid: maid // Include maid in update
+            };
+            if (password) {
+                payload.password = password;
+            }
+
+            const res = await axiosClient.put('/auth/me/', payload);
+            if (res.status === 200) {
+                alert('Profile updated successfully!');
+                // Ideally update context here, but for now simple alert
+                // If password changed, maybe force logout?
+                if (password) {
+                    alert("Password changed. Please login again.");
+                    logout();
+                    navigate('/login');
+                } else {
+                    window.location.reload(); // Simple reload to reflect name changes in header
+                }
+                closeModal();
+            }
+        } catch (error) {
+            console.error(error);
+            alert(error.response?.data?.error || 'Failed to update profile');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleDeleteAccount = async () => {
+        if (!window.confirm("CRITICAL WARNING: Are you sure you want to delete your account? This action cannot be undone and will delete all your data.")) {
+            return;
+        }
+
+        setIsLoading(true);
+        try {
+            await axiosClient.delete('/auth/me/');
+            alert('Account deleted successfully. We are sorry to see you go.');
+            logout();
+            navigate('/', { replace: true });
+        } catch (error) {
+            console.error(error);
+            alert(error.response?.data?.error || 'Failed to delete account');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const getInitials = (name) => {
@@ -51,6 +132,8 @@ const SettingModal = forwardRef((props, ref) => {
     const handleModalClick = (e) => {
         e.stopPropagation();
     };
+
+    if (!authUser) return null; // Or handle guest view appropriately
 
     return (
         <div
@@ -78,8 +161,8 @@ const SettingModal = forwardRef((props, ref) => {
 
                                 {/* Role Badge */}
                                 <span className={`text-[10px] md:text-xs font-bold py-1 px-2 md:px-3 rounded-full shadow-sm flex-shrink-0 ${user.role === 'Admin'
-                                        ? 'bg-red-100 text-red-600'
-                                        : 'bg-green-100 text-brand-green'
+                                    ? 'bg-red-100 text-red-600'
+                                    : 'bg-green-100 text-brand-green'
                                     }`}>
                                     {user.role}
                                 </span>
@@ -88,10 +171,10 @@ const SettingModal = forwardRef((props, ref) => {
                         </div>
                     </div>
 
-                    {/* Copy Button: Full width on mobile, auto on desktop */}
+                    {/* Copy Button */}
                     <button
                         className="w-full sm:w-auto border border-dashed border-brand-green text-brand-green px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-brand-light transition-colors flex items-center justify-center gap-2"
-                        onClick={() => navigator.clipboard.writeText(user.id)}
+                        onClick={() => navigator.clipboard.writeText(user.displayId)}
                     >
                         <i className="fa-regular fa-copy"></i> <span className="sm:hidden md:inline">Copy ID</span>
                     </button>
@@ -106,30 +189,47 @@ const SettingModal = forwardRef((props, ref) => {
                         <div className="flex-1 flex gap-3">
                             <input
                                 type="text"
-                                defaultValue={user.firstName}
+                                value={firstName}
+                                onChange={(e) => setFirstName(e.target.value)}
                                 className="w-1/2 md:flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-brand-green transition-colors text-slate-700 font-medium"
+                                placeholder="First Name"
                             />
                             <input
                                 type="text"
-                                defaultValue={user.lastName}
+                                value={lastName}
+                                onChange={(e) => setLastName(e.target.value)}
                                 className="w-1/2 md:flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-brand-green transition-colors text-slate-700 font-medium"
+                                placeholder="Last Name"
                             />
                         </div>
                     </div>
 
-                    {/* User ID (Readonly) */}
+                    {/* User ID (With Edit Button) */}
                     <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6">
                         <label className="w-full md:w-24 font-bold text-sm text-slate-700">User ID</label>
-                        <div className="flex-1 relative">
-                            <div className="absolute left-3 top-1/2 -translate-y-1/2 mt-2 w-5 h-5 bg-brand-green rounded-full flex items-center justify-center text-white text-[10px]">
-                                <i className="fa-solid fa-star text-[8px]"></i>
+                        <div className="flex-1 relative flex gap-2">
+                            <div className="relative flex-1">
+                                <div className="absolute left-3 top-1/2 -translate-y-1/2 mt-2 w-5 h-5 bg-brand-green rounded-full flex items-center justify-center text-white text-[10px] z-10">
+                                    <i className="fa-solid fa-star text-[8px]"></i>
+                                </div>
+                                <input
+                                    type="text"
+                                    value={maid}
+                                    onChange={(e) => setMaid(e.target.value)}
+                                    readOnly={!isIdEditable}
+                                    className={`w-full border rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-brand-green transition-colors font-medium ${isIdEditable ? 'bg-white border-gray-200 text-slate-700' : 'bg-gray-50 border-gray-200 text-slate-500 cursor-default'}`}
+                                    placeholder="N/A"
+                                />
                             </div>
-                            <input
-                                type="text"
-                                defaultValue={user.id}
-                                readOnly
-                                className="w-full border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-sm bg-gray-50 focus:outline-none focus:border-brand-green transition-colors text-slate-500 font-medium cursor-default"
-                            />
+                            {!isIdEditable && (
+                                <button
+                                    onClick={handleEditId}
+                                    className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-slate-600 rounded-xl text-xs font-bold transition-colors"
+                                    title="Edit User ID"
+                                >
+                                    <i className="fa-solid fa-pen"></i>
+                                </button>
+                            )}
                         </div>
                     </div>
 
@@ -139,7 +239,9 @@ const SettingModal = forwardRef((props, ref) => {
                         <div className="flex-1 relative">
                             <input
                                 type={showPassword ? "text" : "password"}
-                                defaultValue="password123"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                placeholder="Leave empty to keep current"
                                 className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-brand-green transition-colors font-medium pr-10"
                             />
                             <i
@@ -152,8 +254,12 @@ const SettingModal = forwardRef((props, ref) => {
 
                 {/* Footer Actions */}
                 <div className="flex flex-col-reverse sm:flex-row items-center justify-between mt-8 md:mt-10 pt-4 border-t border-gray-50 gap-4 sm:gap-0">
-                    <button className="w-full sm:w-auto bg-[#d66d6d] text-white px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-red-500 transition-colors flex items-center justify-center gap-2 shadow-sm">
-                        <i className="fa-regular fa-trash-can"></i> Delete Account
+                    <button
+                        onClick={handleDeleteAccount}
+                        disabled={isLoading}
+                        className="w-full sm:w-auto bg-[#d66d6d] text-white px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-red-500 transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
+                    >
+                        <i className="fa-regular fa-trash-can"></i> {isLoading ? 'Processing...' : 'Delete Account'}
                     </button>
                     <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
                         <button
@@ -163,10 +269,11 @@ const SettingModal = forwardRef((props, ref) => {
                             Cancel
                         </button>
                         <button
-                            onClick={handleActionClose}
-                            className="w-full sm:w-auto bg-[#2d3748] text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-black transition-colors shadow-lg shadow-slate-200"
+                            onClick={handleSave}
+                            disabled={isLoading}
+                            className="w-full sm:w-auto bg-[#2d3748] text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-black transition-colors shadow-lg shadow-slate-200 disabled:opacity-50"
                         >
-                            Save changes
+                            {isLoading ? 'Saving...' : 'Save changes'}
                         </button>
                     </div>
                 </div>

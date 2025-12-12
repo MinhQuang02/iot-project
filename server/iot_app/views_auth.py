@@ -531,6 +531,9 @@ class ForgotPasswordView(APIView):
 class UserDetailView(APIView):
     def get(self, request):
         user = request.user
+        if not user.is_authenticated:
+            return Response({'error': 'Not authenticated'}, status=status.HTTP_401_UNAUTHORIZED)
+            
         supabase = get_supabase_client()
         
         try:
@@ -539,5 +542,89 @@ class UserDetailView(APIView):
                 return Response(res.data[0])
             else:
                 return Response({'error': 'User not found in database'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def put(self, request):
+        """Update user profile: First Name, Last Name, Password, and MaID"""
+        user = request.user
+        if not user.is_authenticated:
+            return Response({'error': 'Not authenticated'}, status=status.HTTP_401_UNAUTHORIZED)
+            
+        data = request.data
+        first_name = data.get('first_name')
+        last_name = data.get('last_name')
+        password = data.get('password')
+        maid = data.get('maid')  # Can be empty string if user clears it? Or just None if not provided. Use caution.
+        
+        supabase = get_supabase_client()
+        
+        update_data = {}
+        if first_name is not None:
+            update_data['TenND'] = first_name
+        if last_name is not None:
+            update_data['HoND'] = last_name
+        if password:
+            update_data['MatKhau'] = make_password(password)
+        if maid is not None:
+            # If empty string, maybe set to specific value or handle? 
+            # Assuming maid is INT in DB. If string provided, it must be parseable.
+            # If empty string set to None (NULL in DB) if allowed, or error?
+            # DB schema: "MaID" INT UNIQUE. So regex check or try/catch.
+            if maid == "":
+                 update_data['MaID'] = None
+            else:
+                 try:
+                     update_data['MaID'] = int(maid)
+                 except ValueError:
+                     return Response({'error': 'User ID must be a number'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not update_data:
+            return Response({'message': 'No changes detected'}, status=status.HTTP_200_OK)
+            
+        try:
+            # 1. Update Supabase
+            res = supabase.table('NGUOI_DUNG').update(update_data).eq('Username', user.username).execute()
+            
+            if not res.data:
+                # If MaID duplicate, Supabase might throw error here, catch in Exception
+                return Response({'error': 'Failed to update user in database'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                
+            # 2. Update Local Django User
+            if first_name is not None:
+                user.first_name = first_name
+            if last_name is not None:
+                user.last_name = last_name
+            if password:
+                user.set_password(password)
+            user.save()
+            
+            return Response({'message': 'Profile updated successfully', 'user': res.data[0]}, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            err_msg = str(e)
+            if "duplicate key value violates unique constraint" in err_msg and "MaID" in err_msg:
+                 return Response({'error': 'User ID already exists. Please choose another.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def delete(self, request):
+        """Delete user account and all associated data"""
+        user = request.user
+        if not user.is_authenticated:
+            return Response({'error': 'Not authenticated'}, status=status.HTTP_401_UNAUTHORIZED)
+            
+        supabase = get_supabase_client()
+        
+        try:
+            # 1. Delete from Supabase (Trigger cascade deletes if configured in DB, else manual might be needed)
+            # Based on db.sql, we have ON DELETE CASCADE for foreign keys, so deleting NGUOI_DUNG is sufficient.
+            
+            res = supabase.table('NGUOI_DUNG').delete().eq('Username', user.username).execute()
+            
+            # 2. Delete Local Django User
+            user.delete()
+            
+            return Response({'message': 'Account deleted successfully'}, status=status.HTTP_200_OK)
+            
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
