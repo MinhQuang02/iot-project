@@ -1,8 +1,7 @@
 from rest_framework import serializers
 
 class LoginSerializer(serializers.Serializer):
-    username = serializers.CharField(required=False)
-    email = serializers.EmailField(required=False)
+    email = serializers.EmailField(required=True)
     password = serializers.CharField(write_only=True)
 
 class RegisterSerializer(serializers.Serializer):
@@ -18,6 +17,4 @@ class GoogleLoginSerializer(serializers.Serializer):
 class ForgotPasswordSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
-class ResetPasswordSerializer(serializers.Serializer):
-    token = serializers.CharField()
-    new_password = serializers.CharField(write_only=True)
+

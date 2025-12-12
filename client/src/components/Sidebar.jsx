@@ -1,5 +1,5 @@
 import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const Sidebar = forwardRef((props, ref) => {
@@ -8,6 +8,7 @@ const Sidebar = forwardRef((props, ref) => {
     const { user, logout } = useAuth();
 
     const location = useLocation();
+    const navigate = useNavigate();
     const currentPath = location.pathname;
 
     useImperativeHandle(ref, () => ({
@@ -92,7 +93,11 @@ const Sidebar = forwardRef((props, ref) => {
                                     to={item.path}
                                     className={`group relative flex items-center h-14 w-full transition-all duration-300 ease-in-out ${!isActive ? 'hover:bg-white/10' : ''
                                         }`}
-                                    onClick={() => {
+                                    onClick={(e) => {
+                                        if (!user && item.path !== '/') {
+                                            e.preventDefault();
+                                            navigate('/signup');
+                                        }
                                         if (isMobile) setIsOpen(false);
                                     }}
                                 >

@@ -65,7 +65,7 @@ const ForgotPassword = () => {
 
             {/* Submit Button */}
             <button className="w-full bg-brand-green hover:bg-emerald-500 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-brand-green/30 active:scale-[0.98]">
-              Send recovery link
+              Send recovery password
             </button>
 
             {/* Return Link */}

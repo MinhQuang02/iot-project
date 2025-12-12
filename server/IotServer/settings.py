@@ -50,13 +50,8 @@ INSTALLED_APPS = [
 ]
 
 # Supabase Configuration
-SUPABASE_URL = 'https://xwvnmxgrwptdlefbjvsq.supabase.co'
-SUPABASE_KEY = 'sb_secret_7D_JIlajkH4BYwMJlWYfMQ_wxfhPFhK'
-SUPABASE_PASSWORD = 'sracLKPqdVORR3SW'
-SUPABASE_DB_HOST = 'db.xwvnmxgrwptdlefbjvsq.supabase.co'
-SUPABASE_DB_NAME = 'postgres'
-SUPABASE_DB_USER = 'postgres'
-SUPABASE_DB_PORT = '5432'
+SUPABASE_URL = 'https://oslspuzcdepplpkrrdqy.supabase.co'
+SUPABASE_KEY = 'sb_secret_uBDE7HCCu5WnISD9_DQQsQ_-5KRgKdh'
 
 # Email Configuration
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
@@ -100,6 +95,8 @@ WSGI_APPLICATION = 'IotServer.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
+
+# SUPABASE CONNECTION SETUP
 
 DATABASES = {
     'default': {
@@ -172,3 +169,6 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Abstract Email Validation API Key
+ABSTRACT_API_KEY = "ce4c015af5d345aea1d07eb4e04bc893"

@@ -9,7 +9,7 @@ const Login = () => {
   const [rememberMe, setRememberMe] = useState(false);
 
   const [formData, setFormData] = useState({
-    username: '',
+    email: '',
     password: ''
   });
   const [error, setError] = useState('');
@@ -24,7 +24,7 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const res = await login(formData.username, null, formData.password);
+    const res = await login(null, formData.email, formData.password);
     if (res.success) {
       navigate('/');
     } else {
@@ -68,13 +68,13 @@ const Login = () => {
 
             {/* Input: Login (Email/User) */}
             <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Login</label>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Email</label>
               <input
-                name="username"
-                value={formData.username}
+                name="email"
+                value={formData.email}
                 onChange={handleChange}
                 type="text"
-                placeholder="Enter username"
+                placeholder="Enter email"
                 className="w-full bg-gray-100 border-none rounded-xl px-4 py-3.5 text-sm font-medium text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:ring-brand-green/50 focus:bg-white transition-all outline-none"
               />
             </div>
