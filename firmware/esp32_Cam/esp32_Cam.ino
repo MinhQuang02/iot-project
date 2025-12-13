@@ -7,23 +7,19 @@
 #include "soc/rtc_cntl_reg.h"
 #include "mbedtls/base64.h"
 
-#include "wifi_setup.h"   // Dùng chung WiFiManager với node esp32
+#include "wifi_setup.h"   // Giữ nguyên file này của bạn
 
-// --- CẤU HÌNH MQTT GIỐNG ESP32 MAIN ---
-// HiveMQ Cloud
+// --- CẤU HÌNH MQTT ---
 const char* MQTT_SERVER = "0f9083f82a914f0dadbb8e63ead02e07.s1.eu.hivemq.cloud";
 const int   MQTT_PORT   = 8883;
 const char* MQTT_USER   = "pqminh";
 const char* MQTT_PASS   = "pKH478Dyjpc6fW@";
+const char* MQTT_CLIENT_ID = "ESP32_CAM_NODE_FIXED";
 
-// Client ID cố định cho node camera (tránh đụng với ESP32 MAIN)
-const char* MQTT_CLIENT_ID = "ESP32_CAM_NODE";
+const char* TOPIC_LISTEN = "greenhouse/rfid/scan";    
+const char* TOPIC_STREAM = "greenhouse/camera/stream"; 
 
-// Topic
-const char* TOPIC_LISTEN = "greenhouse/rfid/scan";     // Nghe tín hiệu RFID để chụp
-const char* TOPIC_STREAM = "greenhouse/camera/stream"; // Gửi ảnh vào đây
-
-// Cấu hình chân ESP32-CAM AI Thinker
+// --- PIN MAP ESP32-CAM ---
 #define PWDN_GPIO_NUM     32
 #define RESET_GPIO_NUM    -1
 #define XCLK_GPIO_NUM      0
@@ -44,18 +40,14 @@ const char* TOPIC_STREAM = "greenhouse/camera/stream"; // Gửi ảnh vào đây
 WiFiClientSecure espClient;
 PubSubClient     client(espClient);
 
-// Forward declaration
-void mqttCallback(char* topic, byte* payload, unsigned int length);
-void captureAndSend();
-void reconnect();
+// Biến cờ (Flag) để xử lý chụp ảnh trong Loop
+bool needCapture = false;
 
 void setup() {
-  // Tắt brownout để tránh reset vì sụt áp khi dùng camera
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
   Serial.begin(115200);
-  delay(500);
-
-  // 1. KHỞI TẠO CAMERA
+  
+  // 1. CAMERA INIT
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
   config.ledc_timer   = LEDC_TIMER_0;
@@ -77,66 +69,65 @@ void setup() {
   config.pin_reset    = RESET_GPIO_NUM;
   config.xclk_freq_hz = 20000000;
   config.pixel_format = PIXFORMAT_JPEG;
-  config.frame_size   = FRAMESIZE_VGA;   // VGA cho nhẹ mạng
+  
+  // Quan trọng: fb_count = 1 để giảm thiểu buffer cũ, nhưng vẫn cần flush
+  config.frame_size   = FRAMESIZE_VGA;   
   config.jpeg_quality = 12;
-  config.fb_count     = 1;
+  config.fb_count     = 1; 
 
   if (esp_camera_init(&config) != ESP_OK) {
     Serial.println("Loi Camera!");
     return;
   }
-  Serial.println("Camera init OK.");
 
-  // 2. KẾT NỐI WIFI QUA WiFiManager (CHUNG VỚI NODE ESP32)
-  wifiSetup();               // dùng portal/SSID như trong wifi_setup.h
-  WiFi.setSleep(false);      // tránh sleep gây chập chờn khi chụp/gửi ảnh
+  // 2. WIFI
+  wifiSetup();
+  WiFi.setSleep(false);
 
-  // 3. ĐỒNG BỘ THỜI GIAN (NẾU SAU NÀY MUỐN GẮN TIMESTAMP CHO ẢNH)
+  // 3. NTP
   configTime(0, 0, "pool.ntp.org", "time.nist.gov");
-  Serial.print("NTP Sync");
-  while (time(nullptr) < 100000) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println(" OK!");
-
-  // 4. CẤU HÌNH MQTT (CHUNG BROKER VỚI ESP32 MAIN)
-  espClient.setInsecure();      // demo: bỏ verify certificate
-  espClient.setTimeout(15);
+  
+  // 4. MQTT
+  espClient.setInsecure();
   client.setServer(MQTT_SERVER, MQTT_PORT);
   client.setCallback(mqttCallback);
-  client.setBufferSize(4096);   // đủ lớn cho chunk base64
+  client.setBufferSize(4096); 
   client.setKeepAlive(60);
-
-  Serial.println("ESP32-CAM ready (WiFi + MQTT).");
 }
 
 void reconnect() {
   while (!client.connected()) {
-    Serial.print("Connecting MQTT (CAM)...");
+    Serial.print("Connecting MQTT...");
     if (client.connect(MQTT_CLIENT_ID, MQTT_USER, MQTT_PASS)) {
-      Serial.println(" CONNECTED!");
-      client.subscribe(TOPIC_LISTEN); // Lắng nghe tín hiệu RFID scan
-      Serial.print("Subscribed to: ");
-      Serial.println(TOPIC_LISTEN);
+      Serial.println(" OK!");
+      client.subscribe(TOPIC_LISTEN);
     } else {
-      Serial.print("Failed, rc=");
-      Serial.print(client.state());
-      Serial.println(" (Wait 5s)");
       delay(5000);
     }
   }
 }
 
-// HÀM CHỤP ẢNH VÀ GỬI
+// --- HÀM CHỤP ĐÃ SỬA LỖI ẢNH CŨ ---
 void captureAndSend() {
-  camera_fb_t * fb = esp_camera_fb_get();
+  Serial.println("-> Dang xu ly anh...");
+  
+  camera_fb_t * fb = NULL;
+
+  // BƯỚC 1: XẢ ẢNH CŨ (FLUSH BUFFER)
+  // Lấy ảnh đang nằm chờ trong buffer ra và vứt đi ngay lập tức
+  fb = esp_camera_fb_get();
+  esp_camera_fb_return(fb); 
+  
+  // BƯỚC 2: CHỤP ẢNH MỚI (REAL CAPTURE)
+  // Lần gọi này sẽ bắt buộc Camera chụp khoảnh khắc hiện tại
+  fb = esp_camera_fb_get();
+  
   if (!fb) {
     Serial.println("Capture failed");
     return;
   }
 
-  // Encode base64
+  // BƯỚC 3: GỬI ẢNH
   size_t outputLength;
   mbedtls_base64_encode(NULL, 0, &outputLength, fb->buf, fb->len);
   unsigned char * encoded = new unsigned char[outputLength + 1];
@@ -148,34 +139,39 @@ void captureAndSend() {
   int totalLen = base64Str.length();
   int chunkSize = 2048;
 
-  // Gửi ảnh dạng chuỗi tin nhắn: IMAGE_START -> nhiều chunk -> IMAGE_END
   client.publish(TOPIC_STREAM, "IMAGE_START");
+  
+  // Gửi từng phần
   for (int i = 0; i < totalLen; i += chunkSize) {
     int end = (i + chunkSize < totalLen) ? (i + chunkSize) : totalLen;
     String chunk = base64Str.substring(i, end);
     client.publish(TOPIC_STREAM, chunk.c_str());
-    delay(5);   // tránh flood broker quá nhanh
+    client.loop(); // Giữ kết nối MQTT sống khi gửi file nặng
+    // delay(5); // Không cần delay nếu mạng tốt, bỏ đi cho nhanh
   }
+  
   client.publish(TOPIC_STREAM, "IMAGE_END");
-  Serial.println("Image Sent!");
+  Serial.println("-> Da gui xong anh MOI NHAT!");
 
   delete[] encoded;
   esp_camera_fb_return(fb);
 }
 
-// KHI NHẬN TÍN HIỆU TỪ RFID -> CHỤP ẢNH
+// Callback chỉ bật cờ, KHÔNG chụp tại đây để tránh lag MQTT
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
-  Serial.print("\n[MQTT] Tin nhan tu: ");
-  Serial.println(topic);
-
-  // Dù payload là gì (JSON UID, lệnh test...), cứ có tin ở TOPIC_LISTEN là chụp
   if (String(topic) == TOPIC_LISTEN) {
-    Serial.println("-> PHAT HIEN QUET THE! DANG CHUP ANH...");
-    captureAndSend();
+    Serial.println("\n[MQTT] Lenh chup nhan duoc -> Set Flag");
+    needCapture = true; 
   }
 }
 
 void loop() {
   if (!client.connected()) reconnect();
   client.loop();
+
+  // Kiểm tra cờ trong vòng lặp chính
+  if (needCapture) {
+    captureAndSend(); // Chụp và gửi
+    needCapture = false; // Reset cờ
+  }
 }
