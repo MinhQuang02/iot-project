@@ -3,6 +3,7 @@ from . import views
 from . import views_auth
 from . import views_data
 from . import views_device
+from . import views_ai
 from rest_framework_simplejwt.views import TokenRefreshView
 
 urlpatterns = [
@@ -37,4 +38,7 @@ urlpatterns = [
     path('device/sensors/', views_device.DeviceSensorsView.as_view(), name='device_sensors'),
     path('device/camera/', views_device.DeviceCameraView.as_view(), name='device_camera'),
     path('device/rfid/', views_device.DeviceRFIDView.as_view(), name='device_rfid'),
+
+    # AI Endpoints
+    path('chat/', views_ai.chat_with_gemini, name='chat_with_gemini'),
 ]
