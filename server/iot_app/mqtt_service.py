@@ -103,9 +103,22 @@ def process_rfid_validation(uid, image_url=None):
     Refined with strict debugging and specific field mapping.
     """
     supabase = get_supabase_client()
+    
+    # --- CONVERT HEX UID TO INT8 (For Database Compatibility) ---
+    uid_int = None
     try:
-        # 2. Validation
-        res = supabase.table('NGUOI_DUNG').select('HoND, TenND, MaID').eq('MaID', uid).execute()
+        # Assuming UID is a Hex string like "A0502825"
+        # The DB 'MaID' is now int8, so we must convert the Hex ID to Integer.
+        uid_int = int(str(uid), 16)
+        print(f"[DEBUG] Converted UID '{uid}' (Hex) -> {uid_int} (Int)")
+    except ValueError:
+        print(f"[ERROR] UID Conversion Failed: '{uid}' is not a valid Hex string.")
+        # If conversion fails (e.g. system messages), we stop to avoid DB errors.
+        return
+
+    try:
+        # 2. Validation using the Integer ID
+        res = supabase.table('NGUOI_DUNG').select('HoND, TenND, MaID').eq('MaID', uid_int).execute()
         user = res.data[0] if res.data else None
         
         is_authorized = False
@@ -125,7 +138,7 @@ def process_rfid_validation(uid, image_url=None):
             threading.Timer(5.0, lambda: send_lcd_message("Ready to Scan...")).start()
 
         else:
-            print(f"[DEBUG] 2. User Validated: Not Found ({uid})")
+            print(f"[DEBUG] 2. User Validated: Not Found ({uid_int})")
             send_lcd_message("Cards do not match")
             threading.Timer(3.0, lambda: send_lcd_message("Ready to Scan...")).start()
 
@@ -133,26 +146,21 @@ def process_rfid_validation(uid, image_url=None):
         print("[DEBUG] 5. Inserting into DB LICH_SU_NHA_KINH...")
         
         # Map fields per instructions
-        # MaID: The ID received. If user doesn't exist, we try to insert the ID anyway if the DB allows foreign key issues,
-        # OR we insert NULL. The user prompt says "MaID: The RFID Card ID received".
-        # If the DB enforces FK, this might fail for unknown users. We try 'uid' first.
-        
         history_entry = {
-            "MaID": uid if user else None, # Use None to avoid FK error if user unknown
+            "MaID": uid_int, # Use the Integer ID
             "ThoiDiemVao": datetime.now().isoformat(),
-            "AnhXacMinh": image_url,   # Mapped from 'HinhAnh' to 'AnhXacMinh' per request
-            "TrangThai": is_authorized, # TRUE/FALSE
-            "TrangThaiAnh": True        # TRUE
+            "AnhXacMinh": image_url,   
+            "TrangThai": is_authorized, 
+            "TrangThaiAnh": True        
         }
         
         # Fallback logging if schema differs (e.g. HinhAnh vs AnhXacMinh)
-        # We try strict naming first.
         try:
             insert_res = supabase.table('LICH_SU_NHA_KINH').insert(history_entry).execute()
             print("[DEBUG] 6. SUCCESS: History Recorded.")
         except Exception as db_err:
-             print(f"[ERROR] History Insert Failed: {db_err}")
-             print(f"[ERROR] payload was: {history_entry}")
+            print(f"[ERROR] History Insert Failed: {db_err}")
+            print(f"[ERROR] payload was: {history_entry}")
 
     except Exception as e:
         print(f"[ERROR] Validation/DB Error: {e}")

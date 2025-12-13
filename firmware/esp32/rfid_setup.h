@@ -28,7 +28,8 @@ inline void rfidSetup() {
   Serial.println(v, HEX);
 }
 
-// Xử lý quét RFID + publish MQTT + LCD (logic y như code bạn)
+// Xử lý quét RFID + publish MQTT (logic sửa lại giống hardware simulator)
+// Không tự ý update LCD, không delay
 inline void handleRFID() {
   // 1. Kiểm tra có thẻ mới không
   if (!rfid.PICC_IsNewCardPresent()) return;
@@ -45,10 +46,7 @@ inline void handleRFID() {
   Serial.print("[RFID] UID = ");
   Serial.println(uidRaw);
 
-  // 3. Hiển thị lên LCD: ID + "Dang chup anh..."
-  lcdShowScanScreen(uidRaw);
-
-  // 4. Gửi JSON lên MQTT topic_scan (giữ đúng payload cũ)
+  // 3. Gửi JSON lên MQTT topic_scan (giữ đúng payload cũ)
   String payload = "{\"uid\": \"" + uidRaw +
                    "\", \"status\": \"Scan & Capture\"}";
   mqttClient.publish(MQTT_TOPIC_RFID, payload.c_str());
@@ -57,11 +55,9 @@ inline void handleRFID() {
   Serial.print(": ");
   Serial.println(payload);
 
-  // 5. Dừng giao tiếp với thẻ
+  // 4. Dừng giao tiếp với thẻ
   rfid.PICC_HaltA();
   rfid.PCD_StopCrypto1();
-
-  // 6. Giữ thông báo 3s rồi quay về màn hình chờ
-  delay(3000);
-  lcdShowDefaultScreen();
+  
+  // Xóa delay(3000) và lcdShowDefaultScreen để tránh chặn luồng
 }
