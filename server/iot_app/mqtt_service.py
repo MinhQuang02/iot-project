@@ -5,7 +5,7 @@ import threading
 import time
 import ssl
 import base64
-from datetime import datetime
+from datetime import datetime, timedelta
 from .supabase_client import get_supabase_client
 
 # ===========================
@@ -341,3 +341,40 @@ def request_camera_capture():
 
 def get_cached_data():
     return mqtt_cache
+
+def get_average_temperature_and_humidity_7_days():
+    """
+    Calculates the average Temperature and Humidity for the last 7 days.
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        # Calculate date 7 days ago
+        seven_days_ago = (datetime.now() - timedelta(days=7)).isoformat()
+        
+        # Query DB for records >= 7 days ago
+        res = supabase.table('TRANG_THAI_NHA_KINH')\
+            .select('NhietDo, DoAm')\
+            .gte('ThoiGian', seven_days_ago)\
+            .execute()
+            
+        data = res.data
+        if not data:
+            return {"avg_temp": 0, "avg_humi": 0, "count": 0}
+
+        # Calculate Averages (Filtering out None)
+        valid_temps = [d['NhietDo'] for d in data if d.get('NhietDo') is not None]
+        valid_humis = [d['DoAm'] for d in data if d.get('DoAm') is not None]
+
+        avg_temp = round(sum(valid_temps) / len(valid_temps), 2) if valid_temps else 0
+        avg_humi = round(sum(valid_humis) / len(valid_humis), 2) if valid_humis else 0
+
+        return {
+            "avg_temp": avg_temp,
+            "avg_humi": avg_humi,
+            "count": len(data)
+        }
+        
+    except Exception as e:
+        print(f"[ERROR] Avg 7 Days Calculation Error: {e}")
+        return None
