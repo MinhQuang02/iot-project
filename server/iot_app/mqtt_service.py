@@ -139,7 +139,7 @@ def process_rfid_validation(uid, image_url=None):
 
         else:
             print(f"[DEBUG] 2. User Validated: Not Found ({uid_int})")
-            send_lcd_message("Cards do not match")
+            send_lcd_message("Invalid Card")
             threading.Timer(3.0, lambda: send_lcd_message("Ready to Scan...")).start()
 
         # 5. Inserting into DB LICH_SU_NHA_KINH
