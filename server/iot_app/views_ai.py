@@ -1,59 +1,338 @@
+import os
 import json
+import re
 import requests
+
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
-# GEMINI CONFIGURATION
-# In a production environment, this should be in os.environ or settings.py
-GEMINI_API_KEY = "AIzaSyBMLDgixmFYgOQLZa0m7ka1xVebtWbyYlI"
-GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
+from . import mqtt_service
 
+
+# =========================
+# GEMINI CONFIGURATION
+# =========================
+# Khuyến nghị: dùng ENV để không lộ key khi push Git
+# export GEMINI_API_KEY="..."
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")  # hoặc bạn giữ hard-code key của bạn ở đây khi dev
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
+
+
+# =========================
+# HELPERS
+# =========================
+def _extract_json_obj(text: str):
+    """
+    Gemini đôi khi trả về ```json ...``` hoặc kèm chữ.
+    Hàm này cố gắng cắt JSON object {...} và json.loads.
+    """
+    if not text:
+        return None
+
+    cleaned = re.sub(
+        r"^```(?:json)?\s*|```$",
+        "",
+        text.strip(),
+        flags=re.IGNORECASE | re.MULTILINE,
+    )
+
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        return None
+
+    try:
+        obj = json.loads(cleaned[start : end + 1])
+        return obj if isinstance(obj, dict) else None
+    except Exception:
+        return None
+
+
+def _fallback_intent(user_text: str):
+    """
+    Fallback khi Gemini lỗi / chưa có API key.
+    Mục tiêu: hệ thống vẫn chạy được.
+    """
+    t = (user_text or "").lower()
+
+    # Door
+    if any(k in t for k in ["mở cửa", "mo cua", "open door", "open the door"]):
+        return {"intent": "open_door", "reply": "Được, mình mở cửa ngay.", "need_action": True, "extra": {}}
+
+    if any(k in t for k in ["đóng cửa", "dong cua", "close door", "close the door"]):
+        return {"intent": "close_door", "reply": "Được, mình đóng cửa ngay.", "need_action": True, "extra": {}}
+
+    # Sensor
+    if any(k in t for k in ["nhiệt độ", "nhiet do", "độ ẩm", "do am", "check", "kiểm tra", "kiem tra"]):
+        if any(k in t for k in ["7 ngày", "7 ngay", "1 tuần", "một tuần", "week", "7 days"]):
+            return {
+                "intent": "get_sensor_history",
+                "reply": "Mình sẽ kiểm tra trung bình 7 ngày gần đây.",
+                "need_action": True,
+                "extra": {"days": 7},
+            }
+        return {"intent": "get_sensor_now", "reply": "Mình sẽ kiểm tra nhiệt độ/độ ẩm hiện tại.", "need_action": True, "extra": {}}
+
+    # Unsupported (heuristic)
+    verbs = ["bật", "tắt", "turn on", "turn off"]
+    devices = ["đèn", "den", "light", "led", "quạt", "fan", "camera", "bơm", "pump"]
+    if any(v in t for v in verbs) and any(d in t for d in devices):
+        return {
+            "intent": "chitchat",
+            "reply": "hiện tại chưa tích hợp chức năng đó",
+            "need_action": False,
+            "extra": {"mode": "unsupported"},
+        }
+
+    # Chitchat thật (fallback)
+    return {
+        "intent": "chitchat",
+        "reply": "Mình nghe đây. Bạn muốn nói gì tiếp?",
+        "need_action": False,
+        "extra": {"mode": "chitchat"},
+    }
+
+
+def _call_gemini_structured(user_text: str):
+    """
+    Gọi Gemini để trả về JSON theo schema:
+    {
+      "intent": "open_door" | "close_door" | "get_sensor_now" | "get_sensor_history" | "chitchat",
+      "reply": "...",
+      "need_action": true/false,
+      "extra": { "days": 7, "mode": "chitchat"|"unsupported" }
+    }
+    """
+    if not GEMINI_API_KEY:
+        return None
+
+    schema = {
+        "type": "object",
+        "properties": {
+            "intent": {
+                "type": "string",
+                "enum": ["open_door", "close_door", "get_sensor_now", "get_sensor_history", "chitchat"],
+            },
+            "reply": {"type": "string"},
+            "need_action": {"type": "boolean"},
+            "extra": {
+                "type": "object",
+                "properties": {
+                    "days": {"type": "integer", "minimum": 1, "maximum": 30},
+                    "mode": {"type": "string", "enum": ["chitchat", "unsupported"]},
+                },
+                "additionalProperties": True,
+            },
+        },
+        "required": ["intent", "reply", "need_action", "extra"],
+        "additionalProperties": False,
+    }
+
+    prompt = (
+        "Bạn là bộ phân loại intent cho chatbot IoT. Trả về ĐÚNG 1 JSON object, KHÔNG thêm chữ nào khác.\n"
+        "Intent hợp lệ: open_door | close_door | get_sensor_now | get_sensor_history | chitchat.\n\n"
+        "Quy tắc:\n"
+        "- Mở cửa => intent=open_door, need_action=true.\n"
+        "- Đóng cửa => intent=close_door, need_action=true.\n"
+        "- Hỏi nhiệt độ/độ ẩm hiện tại hoặc nói 'Check' => intent=get_sensor_now, need_action=true.\n"
+        "- Hỏi nhiệt độ/độ ẩm 7 ngày vừa qua (1 tuần) => intent=get_sensor_history, need_action=true, extra.days=7.\n"
+        "- Yêu cầu tính năng khác (đèn/quạt/camera/...) không thuộc cửa/sensor => intent=chitchat, need_action=false, extra.mode='unsupported', reply='hiện tại chưa tích hợp chức năng đó'.\n"
+        "- Nếu chỉ nói chuyện linh tinh => intent=chitchat, need_action=false, extra.mode='chitchat', reply 1-2 câu ngắn, tự nhiên, tiếng Việt nếu user dùng tiếng Việt.\n\n"
+        f"Câu người dùng: {user_text}"
+    )
+
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "responseMimeType": "application/json",
+            "responseSchema": schema,
+            "temperature": 0.3,
+        },
+    }
+
+    headers = {"Content-Type": "application/json"}
+
+    try:
+        response = requests.post(GEMINI_URL, headers=headers, json=payload, timeout=20)
+        response.raise_for_status()
+        data = response.json()
+
+        candidates = data.get("candidates") or []
+        if not candidates:
+            return None
+
+        parts = ((candidates[0].get("content") or {}).get("parts") or [])
+        if not parts:
+            return None
+
+        text = parts[0].get("text") if isinstance(parts[0], dict) else None
+        return _extract_json_obj(text)
+
+    except Exception:
+        return None
+
+def _call_gemini_short_chitchat_reply(user_text: str):
+    """
+    Dùng Gemini trả lời CHITCHAT 1-2 câu ngắn, liên quan trực tiếp input.
+    Chỉ dùng khi intent=chitchat và reply từ structured bị rỗng/không hợp lệ.
+    """
+    if not GEMINI_API_KEY:
+        return None
+
+    prompt = (
+        "Trả lời như một trợ lý thân thiện. "
+        "Chỉ trả lời 1-2 câu ngắn, liên quan trực tiếp đến câu người dùng. "
+        "Không nhắc đến hệ thống/intent/API. "
+        "Nếu người dùng dùng tiếng Việt thì trả lời tiếng Việt.\n\n"
+        f"Câu người dùng: {user_text}"
+    )
+
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "temperature": 0.7,
+            "maxOutputTokens": 80,
+        },
+    }
+
+    headers = {"Content-Type": "application/json"}
+
+    try:
+        r = requests.post(GEMINI_URL, headers=headers, json=payload, timeout=20)
+        r.raise_for_status()
+        data = r.json()
+        return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+    except Exception:
+        return None
+
+def _normalize_control_servo_result(result):
+    """
+    mqtt_service.control_servo(...) có thể trả:
+    - (ok, msg)
+    - True/False
+    - None
+    """
+    if isinstance(result, tuple) and len(result) >= 1:
+        ok = bool(result[0])
+        msg = str(result[1]) if len(result) > 1 else ""
+        return ok, msg
+    if isinstance(result, bool):
+        return result, ""
+    if result is None:
+        return False, "No response"
+    return bool(result), ""
+
+
+# =========================
+# MAIN ENDPOINT
+# =========================
 @csrf_exempt
 def chat_with_gemini(request):
     """
-    Handle Chatbot requests using Google Gemini API.
     POST /api/chat/
-    Body: { "message": "Hello" }
+    Body: { "message": "..." }
+
+    Client hiện tại chỉ dùng:
+    - data.reply (hiển thị tin nhắn bot)
     """
-    if request.method == 'POST':
-        try:
-            body = json.loads(request.body)
-            user_message = body.get('message', '')
+    if request.method != "POST":
+        return JsonResponse({"status": "error", "message": "Method not allowed"}, status=405)
 
-            if not user_message:
-                return JsonResponse({'status': 'error', 'message': 'Empty message'}, status=400)
+    try:
+        body = json.loads(request.body or "{}")
+        user_message = str(body.get("message", "")).strip()
+    except json.JSONDecodeError:
+        return JsonResponse({"status": "error", "message": "Invalid JSON"}, status=400)
 
-            # --- CALL GEMINI API ---
-            payload = {
-                "contents": [{
-                    "parts": [{"text": user_message}]
-                }]
-            }
-            
-            headers = {'Content-Type': 'application/json'}
-            
-            # Call Google API
-            response = requests.post(GEMINI_URL, headers=headers, json=payload)
-            response.raise_for_status() # Raise error for bad status codes
-            
-            data = response.json()
-            
-            # Parse Response
-            # Structure: data['candidates'][0]['content']['parts'][0]['text']
-            try:
-                ai_reply = data['candidates'][0]['content']['parts'][0]['text']
-            except (KeyError, IndexError):
-                ai_reply = "I'm sorry, I couldn't process that response."
+    if not user_message:
+        return JsonResponse({"status": "error", "message": "Empty message"}, status=400)
 
-            return JsonResponse({'status': 'success', 'reply': ai_reply})
+    # 1) Gemini -> structured JSON (hoặc fallback)
+    action = _call_gemini_structured(user_message) or _fallback_intent(user_message)
 
-        except requests.exceptions.RequestException as e:
-            print(f"[AI Error] Google API Error: {e}")
-            return JsonResponse({'status': 'error', 'message': 'AI Service Unavailable'}, status=503)
-        except json.JSONDecodeError:
-            return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
-        except Exception as e:
-            print(f"[AI Error] Server Error: {e}")
-            return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+    intent = action.get("intent") or "chitchat"
+    extra = action.get("extra") if isinstance(action.get("extra"), dict) else {}
+    reply = str(action.get("reply") or "").strip()
 
-    return JsonResponse({'status': 'error', 'message': 'Method not allowed'}, status=405)
+    # 2) Execute theo intent (CHỈ gọi mqtt_service)
+    # 2.1 Door
+    if intent in ("open_door", "close_door"):
+        desired = "open" if intent == "open_door" else "close"
+        ok, _msg = _normalize_control_servo_result(mqtt_service.control_servo(desired))
+
+        if ok:
+            reply = "Đã mở cửa." if desired == "open" else "Đã đóng cửa."
+        else:
+            reply = "Xin lỗi, hiện tại mình không điều khiển được cửa (MQTT chưa kết nối)."
+
+        return JsonResponse(
+            {"status": "success", "reply": reply, "intent": intent, "need_action": False, "extra": extra},
+            status=200,
+        )
+
+    # 2.2 Sensor now
+    if intent == "get_sensor_now":
+        snap = mqtt_service.get_sensor_now()  # theo yêu cầu: lấy từ mqtt_cache (do mqtt_service đảm nhiệm)
+        temp = snap.get("temperature")
+        humi = snap.get("humidity")
+
+        if temp is None or humi is None:
+            reply = "Hiện tại chưa có dữ liệu cảm biến (chưa nhận từ MQTT)."
+        else:
+            reply = f"Nhiệt độ hiện tại là {temp}°C, độ ẩm là {humi}%."
+
+        return JsonResponse(
+            {"status": "success", "reply": reply, "intent": intent, "need_action": False, "extra": extra},
+            status=200,
+        )
+
+    # 2.3 Sensor history (trung bình 7 ngày) - đã có hàm trong mqtt_service
+    if intent == "get_sensor_history":
+        days = 7  # hệ thống hiện hỗ trợ 7 ngày
+        res = mqtt_service.get_average_temperature_and_humidity_7_days()
+
+        if not res:
+            reply = "Hiện tại chưa lấy được dữ liệu trung bình 7 ngày (lỗi truy vấn)."
+        else:
+            avg_temp = res.get("avg_temp", 0)
+            avg_humi = res.get("avg_humi", 0)
+            count = res.get("count", 0)
+
+            if count == 0:
+                reply = "Chưa có dữ liệu trong 7 ngày gần đây để tính trung bình."
+            else:
+                reply = f"Trung bình 7 ngày gần đây: nhiệt độ ~{avg_temp}°C, độ ẩm ~{avg_humi}% (dựa trên {count} mẫu)."
+
+        return JsonResponse(
+            {"status": "success", "reply": reply, "intent": intent, "need_action": False, "extra": {"days": days}},
+            status=200,
+        )
+
+    # 2.4 Chitchat vs Unsupported
+    if intent == "chitchat":
+        mode = extra.get("mode", "chitchat")
+
+        if mode == "unsupported":
+            reply = "hiện tại chưa tích hợp chức năng đó"
+        else:
+            # CHITCHAT thật: phải trả lời giống LLM 1-2 câu ngắn theo input
+            bad_reply = (not reply) or (reply.lower().strip() == "hiện tại chưa tích hợp chức năng đó")
+
+            if bad_reply:
+                reply = _call_gemini_short_chitchat_reply(user_message)
+
+            # Nếu vẫn fail (mất key/mất mạng), dùng fallback có "dính" input để vẫn liên quan
+            if not reply:
+                reply = f"Mình hiểu bạn đang nói: \"{user_message}\". Bạn muốn mình giúp gì tiếp không?"
+
+        return JsonResponse(
+            {"status": "success", "reply": reply, "intent": "chitchat", "need_action": False, "extra": {"mode": mode}},
+            status=200,
+        )
+
+    # Nếu rơi vào trường hợp ngoài dự kiến, coi như chitchat an toàn
+    return JsonResponse(
+        {"status": "success", "reply": "Mình nghe đây. Bạn muốn nói gì tiếp?", "intent": "chitchat", "need_action": False, "extra": {"mode": "chitchat"}},
+        status=200,
+    )
