@@ -341,3 +341,9 @@ def request_camera_capture():
 
 def get_cached_data():
     return mqtt_cache
+
+def get_sensor_now():
+    return {
+        "temperature": mqtt_cache.get("temperature"),
+        "humidity": mqtt_cache.get("humidity"),
+    }
