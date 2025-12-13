@@ -131,6 +131,42 @@ const Status = () => {
         }
     };
 
+
+    // --- REAL DATA INTEGRATION ---
+    const [sensorData, setSensorData] = React.useState({ temperature: 0, humidity: 0 });
+
+    React.useEffect(() => {
+        // Poll sensor data every 5 seconds
+        const fetchSensors = async () => {
+            try {
+                // Assuming you have an api instance exported from services/api
+                // If not imported, we need to import it at the top. 
+                // For now, I'll use fetch with the known URL, but using 'api' instance is better if available.
+                const token = localStorage.getItem('access_token');
+                if (!token) return;
+
+                const response = await fetch('http://127.0.0.1:8000/api/device/sensors/', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.temperature !== null) {
+                        setSensorData({
+                            temperature: data.temperature || 0,
+                            humidity: data.humidity || 0
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error("Sensor fetch error:", error);
+            }
+        };
+
+        fetchSensors(); // Initial fetch
+        const interval = setInterval(fetchSensors, 5000);
+        return () => clearInterval(interval);
+    }, []);
+
     const MonitorContent = () => (
         <>
             <div className="flex justify-between items-center flex-shrink-0 mb-1">
@@ -160,7 +196,7 @@ const Status = () => {
             </div>
 
             <div className="flex-1 flex items-center justify-center min-h-0 overflow-hidden">
-                {viewMode === 'temp' ? <TemperatureGauge value={25} /> : <HumidityChart value={35} />}
+                {viewMode === 'temp' ? <TemperatureGauge value={sensorData.temperature} /> : <HumidityChart value={sensorData.humidity} />}
             </div>
         </>
     );
@@ -174,10 +210,10 @@ const Status = () => {
 
                 <div className="flex gap-2 w-full md:w-auto justify-end">
                     <span className="hidden md:flex bg-white px-2 py-1 rounded-lg text-[10px] font-bold text-slate-600 shadow-sm border border-slate-100 items-center">
-                        <i className="fa-solid fa-droplet text-blue-500 mr-1"></i> 35%
+                        <i className="fa-solid fa-droplet text-blue-500 mr-1"></i> {sensorData.humidity}%
                     </span>
                     <span className="hidden md:flex bg-white px-2 py-1 rounded-lg text-[10px] font-bold text-slate-600 shadow-sm border border-slate-100 items-center">
-                        <i className="fa-solid fa-temperature-three-quarters text-orange-500 mr-1"></i> 15°C
+                        <i className="fa-solid fa-temperature-three-quarters text-orange-500 mr-1"></i> {sensorData.temperature}°C
                     </span>
 
                     <span className="hidden md:flex bg-white px-2 py-1 rounded-lg text-[10px] font-bold text-slate-600 shadow-sm border border-slate-100 items-center cursor-pointer hover:bg-gray-50">
@@ -201,6 +237,7 @@ const Status = () => {
                     <MonitorContent />
                 </div>
             </div>
+
 
             {/* --- MOBILE FLOATING ACTION BUTTONS (FIXED POSITION) --- */}
             <div className="md:hidden fixed bottom-4 left-4 z-50 flex gap-4">

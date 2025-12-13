@@ -20,8 +20,9 @@ class MqttBridgeConfig(AppConfig):
         
         # Simple singleton-ish check or just start it.
         # Since we want it to run in the background of the web process:
-        try:
-            bridge = MQTTBridge()
-            bridge.start()
-        except Exception as e:
-            print(f"Error starting MQTT Bridge: {e}")
+        # try:
+        #     bridge = MQTTBridge()
+        #     bridge.start()
+        # except Exception as e:
+        #     print(f"Error starting MQTT Bridge: {e}")
+

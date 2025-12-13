@@ -52,6 +52,7 @@ class DeviceSensorsView(APIView):
             "last_update": cache["last_sensor_update"]
         }, status=status.HTTP_200_OK)
 
+
 class DeviceCameraView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -62,6 +63,17 @@ class DeviceCameraView(APIView):
             return Response({"message": "No image available yet"}, status=status.HTTP_204_NO_CONTENT)
         # Return as JSON containing base64
         return Response({"image_base64": img}, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        """
+        Trigger the camera to take a new photo.
+        """
+        success, msg = mqtt_service.request_camera_capture()
+        if success:
+            return Response({"message": msg}, status=status.HTTP_200_OK)
+        else:
+            return Response({"error": msg}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class DeviceRFIDView(APIView):
     permission_classes = [IsAuthenticated]

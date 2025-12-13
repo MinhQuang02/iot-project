@@ -15,39 +15,92 @@ const ControlSystem = () => {
         day: 'numeric', month: 'short', year: 'numeric'
     });
 
-    const handleUpdateDisplay = () => {
+
+    const handleDoorToggle = async () => {
+        if (!user) {
+            navigate('/login');
+            return;
+        }
+
+        const newState = !isDoorOpen ? "open" : "close";
+        // Optimistic UI update
+        setIsDoorOpen(!isDoorOpen);
+
+        try {
+            const token = localStorage.getItem('access_token');
+            if (!token) return;
+
+            const response = await fetch('http://127.0.0.1:8000/api/device/door/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ status: newState })
+            });
+
+            if (!response.ok) {
+                // Revert on failure
+                setIsDoorOpen(isDoorOpen);
+                console.error("Failed to toggle door");
+            }
+        } catch (error) {
+            console.error("Door control error:", error);
+            setIsDoorOpen(isDoorOpen);
+        }
+    };
+
+    const handleLCDUpdate = async () => {
         if (!user) {
             navigate('/login');
             return;
         }
         if (inputValue.trim() !== "") {
             setDisplayText(inputValue);
+
+            // Send to Server
+            try {
+                const token = localStorage.getItem('access_token');
+                if (token) {
+                    await fetch('http://127.0.0.1:8000/api/device/lcd/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ text: inputValue })
+                    });
+                }
+            } catch (e) {
+                console.error("LCD Update failed", e);
+            }
+
             setInputValue("");
         }
     };
 
     const handleKeyDown = (e) => {
-        if (e.key === 'Enter') handleUpdateDisplay();
+        if (e.key === 'Enter') handleLCDUpdate();
     };
 
     const ToggleButton = ({ label, iconClass, isOn, onToggle }) => (
         <div
             className={`border transition-colors duration-300 rounded-2xl 
-            p-5  /* <--- ĐÃ TĂNG TỪ p-3 LÊN p-5 ĐỂ CAO HƠN */
+            p-5
             flex flex-col 
-            gap-3 /* <--- ĐÃ TĂNG TỪ gap-1.5 LÊN gap-3 CHO THOÁNG */
+            gap-3
             cursor-pointer select-none ${isOn ? 'border-brand-green/30 bg-brand-light/20' : 'border-gray-200 hover:bg-gray-50'
                 }`}
             onClick={onToggle}
         >
             <div className="flex justify-between items-start">
-                <i className={`${iconClass} text-2xl /* <--- TĂNG TỪ text-xl LÊN text-2xl */ transition-colors ${isOn ? 'text-brand-green' : 'text-slate-400'}`}></i>
+                <i className={`${iconClass} text-2xl transition-colors ${isOn ? 'text-brand-green' : 'text-slate-400'}`}></i>
 
                 <div className="flex items-center gap-1.5">
                     <span className={`text-[10px] font-bold transition-colors ${isOn ? 'text-brand-green' : 'text-slate-400'}`}>
                         {isOn ? 'ON' : 'OFF'}
                     </span>
-                    <div className={`w-9 h-5 /* <--- TĂNG KÍCH THƯỚC NÚT GẠT CHÚT XÍU */ rounded-full relative transition-colors duration-300 ${isOn ? 'bg-brand-green/20' : 'bg-gray-200'}`}>
+                    <div className={`w-9 h-5 rounded-full relative transition-colors duration-300 ${isOn ? 'bg-brand-green/20' : 'bg-gray-200'}`}>
                         <div className={`absolute top-0.5 w-4 h-4 rounded-full shadow-sm transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${isOn
                             ? 'bg-brand-green left-[calc(100%-1.125rem)]'
                             : 'bg-white left-0.5'
@@ -55,7 +108,7 @@ const ControlSystem = () => {
                     </div>
                 </div>
             </div>
-            <span className={`text-sm /* <--- TĂNG TỪ text-xs LÊN text-sm */ font-bold transition-colors ${isOn ? 'text-slate-700' : 'text-slate-400'}`}>
+            <span className={`text-sm font-bold transition-colors ${isOn ? 'text-slate-700' : 'text-slate-400'}`}>
                 {label}
             </span>
         </div>
@@ -102,7 +155,7 @@ const ControlSystem = () => {
                         className="w-full border-2 border-brand-green/20 rounded-xl py-2.5 pl-4 pr-10 text-xs font-medium text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-brand-green transition-all"
                     />
                     <button
-                        onClick={handleUpdateDisplay}
+                        onClick={handleLCDUpdate}
                         disabled={!inputValue.trim()}
                         className="absolute right-1.5 top-1/2 -translate-y-1/2 mt-3.5 bg-brand-green disabled:bg-gray-300 text-white rounded-full w-7 h-7 flex items-center justify-center hover:bg-emerald-600 transition-colors shadow-sm active:scale-95"
                     >
@@ -116,10 +169,7 @@ const ControlSystem = () => {
                     label="Door System"
                     iconClass="fa-solid fa-door-open"
                     isOn={isDoorOpen}
-                    onToggle={() => {
-                        if (!user) return navigate('/login');
-                        setIsDoorOpen(!isDoorOpen);
-                    }}
+                    onToggle={handleDoorToggle}
                 />
 
                 <ToggleButton
@@ -132,6 +182,7 @@ const ControlSystem = () => {
                     }}
                 />
             </div>
+
 
         </div>
     );

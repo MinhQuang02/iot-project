@@ -6,6 +6,7 @@ from . import views_device
 from rest_framework_simplejwt.views import TokenRefreshView
 
 urlpatterns = [
+    # Test Endpoints
     path('test/health/', views.test_health, name='test_health'),
     path('test/data/', views.test_data, name='test_data'),
     path('test/create/', views.test_create, name='test_create'),
@@ -31,9 +32,9 @@ urlpatterns = [
     path('data/stats/top-users/', views_data.StatisticsTopUsersView.as_view(), name='stats_top_users'),
     
     # Device Control & Data
-    path('api/device/door/', views_device.DeviceDoorView.as_view(), name='device_door'),
-    path('api/device/lcd/', views_device.DeviceLCDView.as_view(), name='device_lcd'),
-    path('api/device/sensors/', views_device.DeviceSensorsView.as_view(), name='device_sensors'),
-    path('api/device/camera/', views_device.DeviceCameraView.as_view(), name='device_camera'),
-    path('api/device/rfid/', views_device.DeviceRFIDView.as_view(), name='device_rfid'),
+    path('device/door/', views_device.DeviceDoorView.as_view(), name='device_door'),
+    path('device/lcd/', views_device.DeviceLCDView.as_view(), name='device_lcd'),
+    path('device/sensors/', views_device.DeviceSensorsView.as_view(), name='device_sensors'),
+    path('device/camera/', views_device.DeviceCameraView.as_view(), name='device_camera'),
+    path('device/rfid/', views_device.DeviceRFIDView.as_view(), name='device_rfid'),
 ]
