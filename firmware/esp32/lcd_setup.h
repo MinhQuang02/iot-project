@@ -19,6 +19,8 @@ inline void lcdSetup() {
   lcd.setCursor(0, 0); lcd.print("   XIN CHAO!   ");
   lcd.setCursor(0, 1); lcd.print("Smart GreenHouse");
   delay(2000); // Giữ màn hình chào 2 giây
+  lcd.clear();
+  lcd.setCursor(0, 0); lcd.print("Ket noi Wifi...");
 }
 
 // Màn hình chờ mặc định: "Ready to Scan..."
