@@ -44,8 +44,9 @@ const ChatBot = () => {
         setInputValue("");
 
         try {
-            // Using fetch to call the Django Backend
-            const response = await fetch('http://127.0.0.1:8000/api/chat/', {
+            // Using fetch to call the Django Backend with Env Var support
+            const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+            const response = await fetch(`${baseUrl}/api/chat/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

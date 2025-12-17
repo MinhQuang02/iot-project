@@ -201,16 +201,100 @@ class StatisticsEnvView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        # 1. Xử lý thời gian (Giữ nguyên logic cũ)
+        period = request.query_params.get('range', '1d')
+        
+        # Lấy giờ hiện tại (UTC)
+        now = datetime.now(pytz.utc)
+        
+        if period == '1d':
+            start_time = now - timedelta(days=1)
+            group_fmt = '%H:00'
+        elif period == '7d':
+            start_time = now - timedelta(days=7)
+            group_fmt = '%Y-%m-%d'
+        elif period == '14d':
+            start_time = now - timedelta(days=14)
+            group_fmt = '%Y-%m-%d'
+        elif period == '30d':
+            start_time = now - timedelta(days=30)
+            group_fmt = '%Y-%m-%d'
+        else:
+            return Response({'error': 'Invalid range'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # 2. Gọi API ThingSpeak
+            base_url = "https://api.thingspeak.com/channels/3199816/feeds.json"
+            
+            # ThingSpeak chấp nhận định dạng ISO hoặc YYYY-MM-DD%20HH:NN:SS
+            params = {
+                "api_key": "DWVG65NHTE9PLVEP",
+                "start": start_time.strftime('%Y-%m-%d %H:%M:%S'),
+                "end": now.strftime('%Y-%m-%d %H:%M:%S')
+            }
+
+            response = requests.get(base_url, params=params)
+            
+            if response.status_code != 200:
+                return Response({'error': 'Failed to fetch data from ThingSpeak'}, status=status.HTTP_502_BAD_GATEWAY)
+
+            data_json = response.json()
+            feeds = data_json.get('feeds', [])
+
+            # 3. Tổng hợp dữ liệu (Aggregate)
+            agg = defaultdict(list)
+            
+            for item in feeds:
+                # Kiểm tra dữ liệu rỗng (ThingSpeak có thể trả về null nếu cảm biến lỗi)
+                if item['field1'] is None or item['field2'] is None:
+                    continue
+
+                # Parse date: ThingSpeak trả về dạng '2023-12-17T10:00:00Z'
+                # Thay Z bằng +00:00 để tương thích với fromisoformat của Python cũ hoặc chuẩn chung
+                dt = datetime.fromisoformat(item['created_at'].replace('Z', '+00:00'))
+                
+                key = dt.strftime(group_fmt)
+                
+                # Lưu ý: Dữ liệu từ API trả về là String ("25.5"), cần ép kiểu về float
+                # GIẢ ĐỊNH: field1 là Nhiệt Độ, field2 là Độ Ẩm.
+                # Nếu ngược lại, bạn hãy đổi chỗ field1 và field2 bên dưới.
+                temp_val = float(item['field1'])
+                hum_val = float(item['field2'])
+
+                agg[key].append({
+                    'NhietDo': temp_val,
+                    'DoAm': hum_val
+                })
+
+            # 4. Tính toán trung bình
+            result = []
+            for key, items in agg.items():
+                avg_temp = sum(x['NhietDo'] for x in items) / len(items)
+                avg_hum = sum(x['DoAm'] for x in items) / len(items)
+                result.append({
+                    'label': key,
+                    'temperature': round(avg_temp, 1),
+                    'humidity': round(avg_hum, 1)
+                })
+            
+            # Kết quả trả về giữ nguyên cấu trúc cũ
+            return Response(result, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
         supabase = get_supabase_client()
         period = request.query_params.get('range', '1d')
         
         now = datetime.now(pytz.utc)
         if period == '1d':
             start_time = now - timedelta(days=1)
-            group_fmt = '%H:00' # Group by hour
+            group_fmt = '%H:00'
         elif period == '7d':
             start_time = now - timedelta(days=7)
-            group_fmt = '%Y-%m-%d' # Group by day
+            group_fmt = '%Y-%m-%d'
         elif period == '14d':
             start_time = now - timedelta(days=14)
             group_fmt = '%Y-%m-%d'

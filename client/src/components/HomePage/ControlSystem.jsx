@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 const ControlSystem = () => {
     const [displayText, setDisplayText] = useState("Welcome to Greenhouse");
     const [inputValue, setInputValue] = useState("");
-    const [isDoorOpen, setIsDoorOpen] = useState(true);
+    const [isDoorOpen, setIsDoorOpen] = useState(false);
     const [isLightOn, setIsLightOn] = useState(true);
 
     const { user } = useAuth();

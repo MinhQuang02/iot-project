@@ -14,7 +14,7 @@ from . import mqtt_service
 # =========================
 # Khuyến nghị: dùng ENV để không lộ key khi push Git
 # export GEMINI_API_KEY="..."
-GEMINI_API_KEY = "AIzaSyBMLDgixmFYgOQLZa0m7ka1xVebtWbyYlI"  # hoặc bạn giữ hard-code key của bạn ở đây khi dev
+GEMINI_API_KEY = "AIzaSyC-schAJqZ7C9-XgVKkWSxZPktaYlo11bI"  # hoặc bạn giữ hard-code key của bạn ở đây khi dev
 GEMINI_MODEL = "gemini-2.5-flash"
 GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
 

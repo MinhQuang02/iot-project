@@ -1,8 +1,10 @@
 import axios from 'axios';
 
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 // Create an Axios instance with default configuration
 const axiosClient = axios.create({
-    baseURL: 'http://localhost:8000/api', // Adjust if your Django server runs on a different port
+    baseURL: `${BASE_URL}/api`,
     headers: {
         'Content-Type': 'application/json',
     },
@@ -36,7 +38,7 @@ axiosClient.interceptors.response.use(
             try {
                 const refreshToken = localStorage.getItem('refresh_token');
                 if (refreshToken) {
-                    const res = await axios.post('http://localhost:8000/api/auth/refresh/', {
+                    const res = await axios.post(`${BASE_URL}/api/auth/refresh/`, {
                         refresh: refreshToken
                     });
 

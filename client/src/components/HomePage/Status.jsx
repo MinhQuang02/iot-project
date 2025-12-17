@@ -228,8 +228,8 @@ const Status = () => {
                 {/* Desktop: Col 1 Status Cards */}
                 <div className="hidden md:flex col-span-1 flex-col justify-between gap-3 h-full">
                     <StatusCard icon="fa-solid fa-bolt" label="Temperature" defaultStatus={true} />
-                    <StatusCard icon="fa-solid fa-wind" label="Humidity" defaultStatus={false} />
-                    <StatusCard icon="fa-solid fa-door-open" label="Door System" defaultStatus={false} />
+                    <StatusCard icon="fa-solid fa-wind" label="Humidity" defaultStatus={true} />
+                    <StatusCard icon="fa-solid fa-door-open" label="Door System" defaultStatus={true} />
                 </div>
 
                 {/* Desktop: Col 2 & 3 Main Display */}
